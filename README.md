@@ -24,6 +24,29 @@ full length. Truncating to 256 trades ~1% relative recall@10 for ~2x less CPU ti
 entire gain and makes it net-negative versus not reranking at all. Full per-question numbers
 and the three-way comparison are in `search_evals/`.
 
+## Latency (retrieval only, n=20, this laptop: 2019 quad-core CPU, no GPU, max_length=256)
+
+| stage                          | p50 ms | p95 ms | mean ms |
+|---------------------------------|-------:|-------:|--------:|
+| BM25                            |      3 |     11 |       4 |
+| Dense (MedCPT query encoder)    |    154 |    219 |     162 |
+| RRF fusion                      |      0 |      0 |       0 |
+| retrieve (bm25 + dense + fusion)|    158 |    224 |     166 |
+| cross-encoder rerank            | 58,534 | 60,968 |  58,107 |
+| end-to-end (retrieve + rerank)  | 58,683 | 61,178 |  58,273 |
+
+Retrieval itself is near-instant — p95 under a quarter of a second. The cross-encoder rerank
+step is essentially the entire latency budget (>99%), which is exactly the cost the
+`max_length` tradeoff above is managing. See `retrieval_latency_bench.py`.
+
+**TODO: latency with generation.** The right way to measure this is end to end in one benchmark
+pass (retrieve + rerank + generation together, which is what `latency_bench.py` already does) —
+not by separately measuring generation and adding it to the numbers above, since that would
+miss any interaction between the stages (e.g. shared model-loading warm-up, real network
+conditions during the full request). Deferred for now because the Gemini free tier's rate limit
+dominates that number more than this hardware does, making it a poor "hardware latency" story
+until either accumulated over several days under the daily cap, or revisited after paid billing.
+
 ## Pipeline
 
 ```
@@ -108,13 +131,11 @@ call, so no rate limits and no throttling to wait through):
 python retrieval_latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 20
 ```
 
-**TODO: generation latency.** `latency_bench.py` does the same thing but adds the Gemini
-generation step (ttft/gen_ms) and free-tier cost accounting. It's not benchmarked yet because
-the free tier's rate limit makes it the dominant, hardware-unrelated cost — measuring it
-honestly means either accumulating samples across several days under the daily request cap, or
-revisiting this after moving to paid billing. Fill in `FREE_RPM`/`FREE_RPD`/pricing at the top
-of `latency_bench.py` from your own AI Studio dashboard first — Google doesn't publish a
-reliable per-model table, and whatever's in the repo may be stale.
+**TODO: latency with generation** (see note under Latency above). `latency_bench.py` does the
+same thing end to end, adding the Gemini generation step (ttft/gen_ms) and free-tier cost
+accounting in the same per-query run. Fill in `FREE_RPM`/`FREE_RPD`/pricing at the top of
+`latency_bench.py` from your own AI Studio dashboard first — Google doesn't publish a reliable
+per-model table, and whatever's in the repo may be stale.
 
 ```bash
 python latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 15
