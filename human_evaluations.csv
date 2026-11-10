@@ -1,0 +1,22 @@
+,id,type,body,workflow,claim_count,pmids,correct_claims,wrong_claims,summary_rating
+0,51757bbb8ed59a060a00002e,yesno,Are long non coding RNAs as conserved in sequence as protein coding genes?,claims,6.0,[],6.0,0.0,
+1,5159cc88d24251bc050000a4,summary,How does exercise affect thyroid hormone receptors expression in the heart?,summary,,[],,,4.0
+2,532206819b2d7acc7e00000f,factoid,Name a method for enrichment of arginine-methylated peptides.,claims,6.0,[],6.0,0.0,
+3,52e8e96698d023950500001f,yesno,"Could Catecholaminergic Polymorphic Ventricular Tachycardia (CPVT)
+cause sudden cardiac death?",claims,8.0,[],8.0,0.0,
+4,517a8bab8ed59a060a000040,list,Which deiodinases are best known to be present in brain?,claims,6.0,[],6.0,0.0,
+5,56b7210b76d8bf8d13000004,factoid,What is the effect of thapsigargin treatment?,claims,10.0,[],7.0,3.0,
+6,571696d9cb4ef8864c000009,yesno,Can RNAPolII function as an RNA-dependent RNA-polymerase?,claims,4.0,[],4.0,0.0,
+7,58bbb68b22d3005309000015,yesno,"Has ""RNA interference"" been awarded Nobel prize?",claims,2.0,[],2.0,0.0,
+8,5a43a581966455904c00000a,summary,Which are the properties of mammalian GA-sequences?,summary,,"['19043592', '19043592', '19270754', '19043592', '22342253', '19043592', '19270754']",,,5.0
+9,5abc9157fcf456587200001e,summary,"What is ""enhancer hijacking""?",summary,,"['36947815', '38076958', '39051548', '34092790', '36947815', '38076958', '39051548', '29284669', '29284669', '34933939']",,,5.0
+10,5c663afe7c78d69471000013,yesno,Is pacritinib effective for treatment of myelofibrosis?,claims,7.0,"['26367195', '30001163', '28336242', '29522138', '24746271', '28336242', '29522138', '29235894', '26389774', '30001163', '27226728', '28441920']",7.0,0.0,
+11,5e822615835f4e4777000034,factoid,Which protein is mutated in Erythropoietic Protoporphyria?,claims,3.0,['29116687'],3.0,0.0,
+12,5e43090d48dab47f26000011,yesno,Are stem cell transplants used to treat acute kidney injury?,claims,0.0,[],0.0,0.0,
+13,601eab7d1cb411341a000053,factoid,What class of drugs have been given a black box warning for suicide?,claims,0.0,[],0.0,0.0,
+14,6024a5891cb411341a0000a3,summary,What is Corkscrew Esophagus?,summary,,[],,,5.0
+15,60607fea94d57fd87900003f,list,Which R packages have been developed for studying TADs?,claims,0.0,[],0.0,0.0,
+16,602354e41cb411341a000098,factoid,Nemolizumab has been shown to be effective for which disease?,claims,0.0,[],0.0,0.0,
+17,626aea6ae764a5320400003d,summary,What is Waylivra?,claims,0.0,[],0.0,0.0,
+18,63eef6edf36125a42600000d,summary,What is the mechanism of action of Teclistamab?,claims,0.0,[],0.0,0.0,
+19,662cfc88187cba990d000008,factoid,What process does tRNA nucleotidyl transferase 1 (TRNT1)  catalyze?,claims,0.0,[],0.0,0.0,

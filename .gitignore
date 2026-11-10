@@ -1,0 +1,19 @@
+# secrets
+.env
+
+# large generated/data artifacts (regenerate via scripts, see README)
+corpus.jsonl
+corpus_embeddings.pt
+Dataset/
+debug/*.xml
+
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# office lock files
+.~lock.*#
+
+# editors
+.vscode/

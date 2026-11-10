@@ -1,0 +1,23 @@
+GoldEnriched turned out to actually be the test set, not an enriched set. Switched all work to use the training set now
+
+The Pubmed API has a silent cap of 10000 documents, so changed the corpus_builder.py to work in batches of 5000 documents
+
+TODO: there are 64 missing documents, and its because they use article tag <PubmedBookArticle> instead of <PubmedArticle>. handle this later
+
+Switched from simple string replacement to regex because I found differences in individual document links. Sometimes trailing slashes also.
+
+The model is good at avoiding to answer questions when sabotaged. But it reveals too much information, like "the given abstracts focus purely on cancer..." etc.
+
+Next step: Manually rate the items in manual_eval/generated_answers.jsonl for faithfulness against the given citations [DONE]
+TODO: The above manual rating is done on the prompt-level (it takes too much time). But ideally it should be done in the atomic claim level (manually sit and split each response into atomic claims etc. etc.). Skipping this for now because of time constraints.
+TODO: As it is taking too much time I have decided to move on to dense search for the time being and return to this section later.
+
+Dense search: decided to use PubMed's own models which they have for article-encoder and query-encoder. There was an Encoder-encoder problem. Two different meanings of the same word in the code
+
+
+
+
+Baseline search metrics:
+    - BM25:
+            MRR =  0.8594373654506312
+            Average recall@10 =  0.6540625191898595
