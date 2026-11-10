@@ -39,13 +39,27 @@ Retrieval itself is near-instant — p95 under a quarter of a second. The cross-
 step is essentially the entire latency budget (>99%), which is exactly the cost the
 `max_length` tradeoff above is managing. See `retrieval_latency_bench.py`.
 
-**TODO: latency with generation.** The right way to measure this is end to end in one benchmark
-pass (retrieve + rerank + generation together, which is what `latency_bench.py` already does) —
-not by separately measuring generation and adding it to the numbers above, since that would
-miss any interaction between the stages (e.g. shared model-loading warm-up, real network
-conditions during the full request). Deferred for now because the Gemini free tier's rate limit
-dominates that number more than this hardware does, making it a poor "hardware latency" story
-until either accumulated over several days under the daily cap, or revisited after paid billing.
+## Latency with generation (n=100, end to end)
+
+| stage                              | p50 ms | p95 ms | mean ms |
+|-------------------------------------|-------:|-------:|--------:|
+| retrieve (bm25 + dense + fusion)    |    114 |    157 |     122 |
+| cross-encoder rerank                | 53,388 | 56,295 |  53,596 |
+| time to first token                 |  3,768 |  9,616 |   4,743 |
+| generation (full response)          |  5,200 | 11,445 |   6,404 |
+| end-to-end                          | 58,853 | 66,090 |  60,123 |
+
+Measured end to end in one benchmark pass per query (`latency_bench.py`), not by separately
+measuring generation and adding it to the retrieval numbers above - that would miss any
+interaction between the stages. 0 retries and 0 rate-limit errors across all 100 queries.
+Ran against **`gemini-3.5-flash-lite`**, not the `gemini-3.6-flash` production default -
+3.6-flash's free tier caps out at a confirmed 20 requests/day (see commit history: hit this
+directly while testing), which can't support a statistically credible n in one sitting;
+flash-lite's free tier is reported (third-party, unverified) at ~500 requests/day. Average
+~3,500 input / ~140 output tokens per query; free tier cost is $0, paid-tier equivalent
+~$0.0014/query (~$1.41 per 1k queries, flash-lite pricing as of 2026-11-09, unverified,
+third-party sourced). Generation (ttft+gen) is real but small next to reranking - cross-encoder
+rerank is still >90% of total latency.
 
 ## Pipeline
 
@@ -131,15 +145,21 @@ call, so no rate limits and no throttling to wait through):
 python retrieval_latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 20
 ```
 
-**TODO: latency with generation** (see note under Latency above). `latency_bench.py` does the
+To benchmark latency with generation included (results above): `latency_bench.py` does the
 same thing end to end, adding the Gemini generation step (ttft/gen_ms) and free-tier cost
-accounting in the same per-query run. Fill in `FREE_RPM`/`FREE_RPD`/pricing at the top of
-`latency_bench.py` from your own AI Studio dashboard first — Google doesn't publish a reliable
-per-model table, and whatever's in the repo may be stale.
+accounting in the same per-query run. The production default model (`generate_response.MODEL`)
+may not have enough free-tier daily quota for a credible sample size — use `--model` (and
+`--rpm`/`--rpd`/`--price-in`/`--price-out`/`--price-date`) to point at a different one for the
+benchmark run without changing the production default:
 
 ```bash
-python latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 15
+python latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 100 \
+    --model gemini-3.5-flash-lite --rpm 10 --rpd 400 --price-in 0.30 --price-out 2.50
 ```
+
+Verify whatever `FREE_RPM`/`FREE_RPD`/pricing you use against your own AI Studio dashboard and
+ai.google.dev/pricing first — Google doesn't publish a reliable per-model table, and the
+defaults baked into the script may be stale by the time you read this.
 
 ## Deploying on low-power hardware
 
