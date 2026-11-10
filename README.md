@@ -101,16 +101,24 @@ python cross-encoder_eval.py --input retrievals/reranked_top10_ml256.csv \
     --output search_evals/cross-encoder-reranked_ml256.csv --label "Cross-Encoder ml=256"
 ```
 
-To benchmark p50/p95 latency and free-tier token cost end to end:
+To benchmark retrieval latency (BM25 / dense / RRF fusion / cross-encoder rerank — no Gemini
+call, so no rate limits and no throttling to wait through):
+
+```bash
+python retrieval_latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 20
+```
+
+**TODO: generation latency.** `latency_bench.py` does the same thing but adds the Gemini
+generation step (ttft/gen_ms) and free-tier cost accounting. It's not benchmarked yet because
+the free tier's rate limit makes it the dominant, hardware-unrelated cost — measuring it
+honestly means either accumulating samples across several days under the daily request cap, or
+revisiting this after moving to paid billing. Fill in `FREE_RPM`/`FREE_RPD`/pricing at the top
+of `latency_bench.py` from your own AI Studio dashboard first — Google doesn't publish a
+reliable per-model table, and whatever's in the repo may be stale.
 
 ```bash
 python latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 15
 ```
-
-Fill in `FREE_RPM`/`FREE_RPD`/pricing at the top of `latency_bench.py` from your own AI Studio
-dashboard first — Google doesn't publish a reliable per-model table, and whatever's in the repo
-may be stale. The free tier's daily request cap makes large `--n` runs impractical in one sitting;
-run small and accumulate across days if you want a larger sample.
 
 ## Deploying on low-power hardware
 
