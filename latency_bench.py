@@ -10,8 +10,9 @@ Times each stage separately, per query:
 Free-tier rules this script follows so the numbers stay honest:
   * Client-side throttle to stay under RPM. Time spent waiting for a slot is
     recorded as `throttle_wait_ms` and is NOT part of any latency number.
-  * A 429 is retried with backoff; the query's timing comes from the attempt that
-    succeeded, and `retries` tells you it happened. Report how many queries hit 429s.
+  * A 429 (rate limit) or 5xx (transient server error - the free tier gets these
+    often under "high demand") is retried with backoff; the query's timing comes
+    from the attempt that succeeded, and `retries` tells you it happened.
   * One warm-up query is run and dropped (model load, TLS handshake, CUDA init).
   * Stops cleanly when the daily request cap would be exceeded.
 
@@ -31,7 +32,6 @@ import time
 from pathlib import Path
 
 import pandas as pd
-from google.genai import errors as genai_errors
 
 import generate_response as generate
 from reranker import rerank
@@ -100,6 +100,20 @@ def cache_key(question, pmids):
 
 # ---------------------------------------------------------------- timed generation
 
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+def _status_of(e):
+    """The genai SDK raises different exception classes for the same kind of failure
+    depending on which internal code path handled the request (e.g. a 429 ClientError
+    vs. a 503 from a different internal error hierarchy that isn't even an APIError
+    subclass) - so check attribute names generically instead of catching one class."""
+    for attr in ("code", "status_code", "status"):
+        v = getattr(e, attr, None)
+        if isinstance(v, int):
+            return v
+    return None
+
 
 def _usage_from(event):
     """Pull token counts off a stream event if the SDK exposes them there."""
@@ -165,8 +179,8 @@ def run_one(q, throttle, use_cache):
             try:
                 text, ttft, gen_ms, (tin, tout) = timed_generate(generate.SYSTEM_STRICT, prompt)
                 break
-            except genai_errors.ClientError as e:
-                if getattr(e, "code", None) != 429 or retries >= MAX_RETRIES:
+            except Exception as e:
+                if _status_of(e) not in RETRYABLE_STATUS or retries >= MAX_RETRIES:
                     raise
                 retries += 1
                 time.sleep(min(60, 2 ** retries) + random.random())
@@ -191,7 +205,7 @@ def pct(series, p):
 
 def summarize(df):
     print(f"\nmodel={generate.MODEL}  queries={len(df)}  cache hits={int(df.cache_hit.sum())}  "
-          f"queries that hit 429={int((df.retries > 0).sum())}")
+          f"queries that needed a retry (429/5xx)={int((df.retries > 0).sum())}")
     print(f"{'stage':<12}{'p50 ms':>10}{'p95 ms':>10}{'mean ms':>10}")
     for col in ["retrieve_ms", "rerank_ms", "ttft_ms", "gen_ms", "e2e_ms"]:
         sub = df[col] if col in ("retrieve_ms", "rerank_ms") else df.loc[~df.cache_hit, col]
