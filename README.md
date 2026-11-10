@@ -13,7 +13,7 @@ with an optional Gemini-based answer generation step on top.
 | Hybrid (BM25 + dense, RRF)          | 0.683     | 0.869  |
 | + cross-encoder rerank, max_length=512 | 0.699 | 0.873  |
 | + cross-encoder rerank, max_length=256 (**deployed default**) | 0.691 | 0.870 |
-| + cross-encoder rerank, max_length=128 | 0.655 | 0.860  |
+| 🔴 + cross-encoder rerank, max_length=128 (regresses below hybrid) | 0.655 | 0.860 |
 
 Reranking's real effect is on recall@10 (pulling more relevant docs into the top 10) — the
 hybrid stage alone already nearly saturates MRR@10 (whether the *single best* result lands
