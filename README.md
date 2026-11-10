@@ -89,6 +89,29 @@ python bi-encoder_retrievals_k100.py
 python cross-encoder_eval.py
 ```
 
+## Deploying on low-power hardware
+
+This runs fine CPU-only on something like an old Surface Pro 3 (8GB RAM) acting as a mini
+server for single-user, non-concurrent use — but a few things matter there:
+
+- **Install the CPU-only torch wheel**, not the default one. Plain `pip install torch` often
+  pulls in CUDA binaries you don't need and don't want to download on a GPU-less machine:
+  ```bash
+  pip install torch --index-url https://download.pytorch.org/whl/cpu
+  ```
+- **Expect slow, not fast.** Two BERT-base-sized models (MedCPT query encoder + MedCPT
+  cross-encoder) running on an old dual-core CPU means cold start (loading both models +
+  building the BM25/FAISS indexes) can take 1-3 minutes, and cross-encoder reranking of 100
+  candidates can take anywhere from ~5 to ~20 seconds depending on abstract length. This is
+  normal, not a bug.
+- **Memory is already deduplicated** — `corpus.py` loads `corpus.jsonl` once and is shared by
+  `bm25_search`, `dense_search`, `reranker`, and `generate_response`, instead of each module
+  keeping its own copy. Without that, 4 separate copies of the corpus plus both models would be
+  tight on 8GB.
+- **Watch for thermal throttling** on fanless variants (base i3 Surface Pro 3). Single queries
+  are short bursts so this shouldn't matter in normal use, but if it feels like it's slowing down
+  the longer it runs, that's likely why.
+
 ## future_work/
 
 LLM-as-judge faithfulness checking and the manual human-evaluation harness. Parked indefinitely —
