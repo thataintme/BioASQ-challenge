@@ -26,4 +26,4 @@ for q in tqdm(questions):
                     "retrievals": search_results})
 df = pd.DataFrame([r for r in retrievals_list])
 
-pd.DataFrame(retrievals_list).to_csv("bi-encoder_retrievals/hybrid_search_retrievals.csv", index=False)
+pd.DataFrame(retrievals_list).to_csv("retrievals/hybrid_search_retrievals_k100.csv", index=False)

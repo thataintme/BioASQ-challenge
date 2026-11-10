@@ -6,11 +6,6 @@ import time
 import xml.etree.ElementTree as ET
 import re
 
-#debug
-missing_pmids=None
-with open('missing_pmids.txt') as f:
-    missing_pmids = [int(line) for line in f if line.strip()]
-
 with open('Dataset/BioASQ-training14b/training14b.json', encoding="utf-8") as f:
     train_ds = json.load(f)
 
@@ -81,6 +76,8 @@ with open("corpus.jsonl", "w") as f:
         f.write(json.dumps(d) + "\n")
 
 found = {d["pmid"] for d in docs}
+# known gap: a handful of gold PMIDs are <PubmedBookArticle> entries, not <PubmedArticle>,
+# so they're skipped by the findall above and always end up here (see future_work/missing_pmids.txt)
 missing = [p for p in gold_pmids if p not in found]
 no_abstract = [d["pmid"] for d in docs if not d["abstract"]]
 print(f"{len(docs)} fetched, {len(missing)} missing, {len(no_abstract)} without abstract")

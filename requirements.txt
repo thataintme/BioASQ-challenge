@@ -1,0 +1,20 @@
+pandas
+numpy
+requests
+tqdm
+python-dotenv
+
+# sparse retrieval
+bm25s
+PyStemmer
+
+# dense retrieval + cross-encoder reranking
+torch
+transformers
+faiss-cpu
+
+# generation
+google-genai
+
+# UI
+streamlit

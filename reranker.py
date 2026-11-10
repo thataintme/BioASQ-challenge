@@ -1,4 +1,6 @@
-# Run this on colab
+# rerank() is also imported live by generate_response.py / app.py for single-query reranking
+# (fine on CPU for one question at a time). The __main__ block below batch-reranks a whole
+# candidates.jsonl file and is what you'd still run on Colab/GPU for a full eval pass.
 
 import json
 

@@ -1,7 +1,7 @@
 """Generation step: retrieve abstracts, build the prompt, ask Gemini for a cited answer.
 
 Usage:
-    from generate import answer
+    from generate_response import answer
     result = answer("What is the difference between Cushing syndrome and Cushing disease?",
                     qtype="summary")
     print(result["ideal_answer"])
@@ -16,13 +16,24 @@ import pandas as pd
 from dotenv import load_dotenv
 from google import genai
 
-import bm25_search
+import hybrid_search
+import reranker
 
 load_dotenv()
 
 MODEL = "gemini-3.6-flash"
 K = 10
-SEARCH_FN = bm25_search.search
+POOL = 100  # hybrid search pool size handed to the cross-encoder
+
+
+def _hybrid_rerank_search(question, k=K):
+    """Default retriever: hybrid search for a generous candidate pool, then cross-encoder
+    rerank down to k. Matches the pipeline bm25/dense/hybrid + reranker.py were evaluated with."""
+    candidates = [pmid for pmid, _ in hybrid_search.search(question, k=POOL)]
+    return [(pmid, None) for pmid in reranker.rerank(question, candidates, k=k)]
+
+
+SEARCH_FN = _hybrid_rerank_search
 
 # Loaded once at import, not once per question
 CORPUS = pd.read_json("./corpus.jsonl", lines=True, dtype={"pmid": str}).set_index("pmid")
