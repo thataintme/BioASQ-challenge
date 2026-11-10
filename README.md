@@ -24,20 +24,27 @@ full length. Truncating to 256 trades ~1% relative recall@10 for ~2x less CPU ti
 entire gain and makes it net-negative versus not reranking at all. Full per-question numbers
 and the three-way comparison are in `search_evals/`.
 
-## Latency (retrieval only, n=20, this laptop: 2019 quad-core CPU, no GPU, max_length=256)
+## Latency (retrieval only, this laptop: 2019 quad-core CPU, no GPU, max_length=256)
 
-| stage                          | p50 ms | p95 ms | mean ms |
-|---------------------------------|-------:|-------:|--------:|
-| BM25                            |      3 |     11 |       4 |
-| Dense (MedCPT query encoder)    |    154 |    219 |     162 |
-| RRF fusion                      |      0 |      0 |       0 |
-| retrieve (bm25 + dense + fusion)|    158 |    224 |     166 |
-| cross-encoder rerank            | 58,534 | 60,968 |  58,107 |
-| end-to-end (retrieve + rerank)  | 58,683 | 61,178 |  58,273 |
+| stage                            | p50 ms | p95 ms | mean ms | n   |
+|------------------------------------|-------:|-------:|--------:|----:|
+| BM25                                |      3 |     11 |       4 |  20 |
+| Dense (MedCPT query encoder)        |    154 |    219 |     162 |  20 |
+| RRF fusion                          |      0 |      0 |       0 |  20 |
+| retrieve (bm25 + dense + fusion)    |    114 |    157 |     122 | 100 |
+| cross-encoder rerank                | 53,388 | 56,295 |  53,596 | 100 |
+| end-to-end (retrieve + rerank)      | 53,531 | 56,418 |  53,718 | 100 |
 
-Retrieval itself is near-instant — p95 under a quarter of a second. The cross-encoder rerank
-step is essentially the entire latency budget (>99%), which is exactly the cost the
-`max_length` tradeoff above is managing. See `retrieval_latency_bench.py`.
+p95 needs a reasonably large sample to mean anything — n=20 is fine for the sub-stage breakdown
+above (BM25/dense/fusion individually, all comfortably under a quarter second regardless), but
+the headline retrieve/rerank/end-to-end numbers use n=100, pulled from the same benchmark run as
+"Latency with generation" below (that run records retrieve_ms/rerank_ms for every query
+regardless of whether generation is included, so no second run was needed). The two samples
+agree on the story even though they're not identical in magnitude (n=20 alone put end-to-end
+p50 at ~58.7s) - the cross-encoder rerank step is essentially the entire latency budget (>99%),
+which is exactly the cost the `max_length` tradeoff above is managing. See
+`retrieval_latency_bench.py` (n=20, no Gemini dependency) and `latency_bench.py` (n=100, full
+pipeline).
 
 ## Latency with generation (n=100, end to end)
 
