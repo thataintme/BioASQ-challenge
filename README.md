@@ -6,14 +6,23 @@ with an optional Gemini-based answer generation step on top.
 
 ## Results (5729 BioASQ training questions, recall@10 / MRR@10)
 
-| Method                          | recall@10 | MRR@10 |
-|----------------------------------|-----------|--------|
-| BM25 (sparse)                    | 0.655     | 0.859  |
-| Dense (MedCPT)                   | 0.607     | 0.790  |
-| Hybrid (BM25 + dense, RRF)        | 0.683     | 0.869  |
-| **Hybrid + cross-encoder rerank** | **0.699** | **0.873** |
+| Method                            | recall@10 | MRR@10 |
+|------------------------------------|-----------|--------|
+| BM25 (sparse)                      | 0.655     | 0.859  |
+| Dense (MedCPT)                     | 0.607     | 0.790  |
+| Hybrid (BM25 + dense, RRF)          | 0.683     | 0.869  |
+| + cross-encoder rerank, max_length=512 | 0.699 | 0.873  |
+| + cross-encoder rerank, max_length=256 (**deployed default**) | 0.691 | 0.870 |
+| + cross-encoder rerank, max_length=128 | 0.655 | 0.860  |
 
-Full per-question numbers are in `search_evals/`.
+Reranking's real effect is on recall@10 (pulling more relevant docs into the top 10) — the
+hybrid stage alone already nearly saturates MRR@10 (whether the *single best* result lands
+first), so there's little room left for reranking to move that number. `max_length` is how
+many tokens of each title+abstract the cross-encoder sees per candidate; 512 is the model's
+full length. Truncating to 256 trades ~1% relative recall@10 for ~2x less CPU time (see
+"Deploying on low-power hardware" below) — truncating further, to 128, erases the reranker's
+entire gain and makes it net-negative versus not reranking at all. Full per-question numbers
+and the three-way comparison are in `search_evals/`.
 
 ## Pipeline
 
@@ -31,13 +40,14 @@ hybrid_search.py     search(question, k)  reciprocal rank fusion of the two abov
 
 bi-encoder_retrievals_k100.py          -> retrievals/hybrid_search_retrievals_k100.csv
 reranker.py / notebooks/..._cross_encoder_reranking.ipynb
-                                        -> retrievals/cross-encoder_reranked_top10.csv
+                                        -> retrievals/reranked_top10_ml{512,256,128}.csv
 
 search_evals.py        -> search_evals/summary.csv, per_question_all.csv   (bm25 / dense / hybrid @10)
-cross-encoder_eval.py  -> search_evals/cross-encoder-reranked.csv          (final reranked @10)
+cross-encoder_eval.py  -> search_evals/cross-encoder-reranked_ml{512,256,128}.csv  (reranked @10, per max_length)
 
 generate_response.py  answer(question, qtype, docs=...)  Gemini generation with citations, given docs
 app.py                 Streamlit UI: search -> show reranked results -> optional "generate answer"
+latency_bench.py        p50/p95 latency + free-tier cost benchmark, stage by stage
 ```
 
 `generate_response.answer()` can retrieve on its own (hybrid search + rerank by default) or take
@@ -84,10 +94,23 @@ To reproduce the retrieval evals:
 ```bash
 python search_evals.py          # bm25 / dense / hybrid @10
 python bi-encoder_retrievals_k100.py
-# rerank retrievals/hybrid_search_retrievals_k100.csv -> retrievals/cross-encoder_reranked_top10.csv
-#   (notebooks/..._cross_encoder_reranking.ipynb, or reranker.py's __main__ on a candidates.jsonl)
-python cross-encoder_eval.py
+# rerank retrievals/hybrid_search_retrievals_k100.csv -> retrievals/reranked_top10_ml{512,256,128}.csv
+#   (notebooks/..._cross_encoder_reranking.ipynb on a GPU - a full 5729-question CPU rerank
+#   is impractically slow, see "Deploying on low-power hardware" below)
+python cross-encoder_eval.py --input retrievals/reranked_top10_ml256.csv \
+    --output search_evals/cross-encoder-reranked_ml256.csv --label "Cross-Encoder ml=256"
 ```
+
+To benchmark p50/p95 latency and free-tier token cost end to end:
+
+```bash
+python latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 15
+```
+
+Fill in `FREE_RPM`/`FREE_RPD`/pricing at the top of `latency_bench.py` from your own AI Studio
+dashboard first — Google doesn't publish a reliable per-model table, and whatever's in the repo
+may be stale. The free tier's daily request cap makes large `--n` runs impractical in one sitting;
+run small and accumulate across days if you want a larger sample.
 
 ## Deploying on low-power hardware
 
@@ -100,10 +123,14 @@ server for single-user, non-concurrent use — but a few things matter there:
   pip install torch --index-url https://download.pytorch.org/whl/cpu
   ```
 - **Expect slow, not fast.** Two BERT-base-sized models (MedCPT query encoder + MedCPT
-  cross-encoder) running on an old dual-core CPU means cold start (loading both models +
-  building the BM25/FAISS indexes) can take 1-3 minutes, and cross-encoder reranking of 100
-  candidates can take anywhere from ~5 to ~20 seconds depending on abstract length. This is
-  normal, not a bug.
+  cross-encoder) running on CPU means cold start (loading both models + building the
+  BM25/FAISS indexes) can take 1-3 minutes. Cross-encoder reranking is the dominant cost in
+  the whole pipeline: it pads every batch to its *longest* document, and a single long
+  abstract can force a full chunk up to the model's max sequence length. Measured on a
+  2019 quad-core laptop CPU (no GPU), a chunk of 25 candidates at full length took ~30s;
+  that's exactly why the default `max_length` is 256, not 512 (see Results above) — on an
+  actual 2014-era dual-core CPU like a Surface Pro 3, expect this to be meaningfully slower
+  still.
 - **Memory is already deduplicated** — `corpus.py` loads `corpus.jsonl` once and is shared by
   `bm25_search`, `dense_search`, `reranker`, and `generate_response`, instead of each module
   keeping its own copy. Without that, 4 separate copies of the corpus plus both models would be

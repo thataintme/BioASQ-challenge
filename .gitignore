@@ -11,6 +11,10 @@ debug/*.xml
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+.venv/
+
+# benchmark output
+latency_runs*.csv
 
 # office lock files
 .~lock.*#
