@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BioASQ Biomedical Literature RAG</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #faf9f7;
+    --surface: #ffffff;
+    --border: #e4e0da;
+    --text: #1f1c18;
+    --text-dim: #6b655c;
+    --accent: #0f6b5c;
+    --accent-ink: #ffffff;
+    --chip-bg: #f1efe9;
+    --code-bg: #f4f2ee;
+    --danger: #a6341b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17160f;
+      --surface: #201e17;
+      --border: #3a362c;
+      --text: #ece8e0;
+      --text-dim: #a8a194;
+      --accent: #37c9a8;
+      --accent-ink: #0a1512;
+      --chip-bg: #2a271d;
+      --code-bg: #262319;
+      --danger: #e2714f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+  header h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  header p.sub { color: var(--text-dim); margin: 0 0 20px; }
+  header .links { font-size: 0.9rem; margin-bottom: 28px; }
+  header .links a { color: var(--accent); text-decoration: none; }
+  header .links a:hover { text-decoration: underline; }
+
+  section { margin-bottom: 36px; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; color: var(--text-dim); font-weight: 600;
+       text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; }
+  .example-chip {
+    background: var(--chip-bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 999px; padding: 8px 14px; font-size: 0.9rem; cursor: pointer;
+  }
+  .example-chip:hover { border-color: var(--accent); }
+  .example-chip.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .search-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .search-row input[type="text"] {
+    flex: 1 1 320px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 1rem;
+  }
+  .search-row select {
+    padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 1rem;
+  }
+  button {
+    padding: 10px 18px; border-radius: 8px; border: none; background: var(--accent);
+    color: var(--accent-ink); font-size: 0.95rem; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.secondary { background: var(--chip-bg); color: var(--text); border: 1px solid var(--border); }
+
+  .status { color: var(--text-dim); font-size: 0.9rem; margin-top: 10px; min-height: 1.3em; }
+  .status.error { color: var(--danger); }
+
+  .results { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+  .doc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .doc .rank { color: var(--text-dim); font-size: 0.8rem; margin-bottom: 2px; }
+  .doc a.title { color: var(--text); font-weight: 600; text-decoration: none; }
+  .doc a.title:hover { color: var(--accent); }
+  .doc .abstract {
+    color: var(--text-dim); font-size: 0.9rem; margin-top: 6px;
+    max-height: 4.5em; overflow: hidden; position: relative;
+  }
+  .doc .pmid-link { font-size: 0.8rem; color: var(--accent); text-decoration: none; }
+
+  .answer-box { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+                padding: 16px; margin-top: 14px; }
+  .answer-box .exact { font-weight: 600; margin-bottom: 8px; }
+
+  .generate-row { margin-top: 16px; }
+  footer { color: var(--text-dim); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 20px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>BioASQ Biomedical Literature RAG</h1>
+    <p class="sub">Sparse (BM25) + dense (MedCPT) retrieval, fused and reranked with a MedCPT
+      cross-encoder, over ~58k PubMed abstracts — with optional Gemini-generated, cited answers.</p>
+    <div class="links">
+      <a href="https://github.com/thataintme/BioASQ-challenge" target="_blank">Source + benchmarks on GitHub</a>
+    </div>
+  </header>
+
+  <section>
+    <h2>Try a curated example</h2>
+    <p style="color:var(--text-dim); margin-top:-6px;">Precomputed from the real pipeline — loads instantly.</p>
+    <div class="examples" id="examples"></div>
+  </section>
+
+  <section>
+    <h2>Ask your own question</h2>
+    <p style="color:var(--text-dim); margin-top:-6px;">
+      Runs live: hybrid retrieval + MedCPT cross-encoder reranking over 100 candidates on CPU hardware —
+      typically <strong>about a minute</strong>. This is a real, honest measurement, not a demo shortcut.
+    </p>
+    <div class="search-row">
+      <input type="text" id="question" placeholder="e.g. Is CPAP effective for treating sleep apnea?" maxlength="500" />
+      <select id="qtype">
+        <option value="summary">summary</option>
+        <option value="yesno">yes/no</option>
+        <option value="factoid">factoid</option>
+        <option value="list">list</option>
+      </select>
+      <button id="search-btn">Search</button>
+    </div>
+    <div class="status" id="status"></div>
+  </section>
+
+  <section id="result-section" style="display:none;">
+    <h2 id="result-heading">Top 10 reranked results</h2>
+    <div class="results" id="results"></div>
+    <div class="generate-row">
+      <button id="generate-btn" class="secondary">Generate answer</button>
+    </div>
+    <div class="status" id="gen-status"></div>
+    <div class="answer-box" id="answer-box" style="display:none;"></div>
+  </section>
+
+  <footer>
+    Retrieval evaluated at recall@10=0.691 / MRR@10=0.870 across 5729 BioASQ questions.
+    Generation uses <code>gemini-3.5-flash-lite</code> here (higher free-tier headroom for public use);
+    see the repo for the full methodology, the cross-encoder <code>max_length</code> tradeoff study,
+    and measured p50/p95 latency.
+  </footer>
+
+</div>
+
+<script>
+// Point this at wherever server.py is actually running.
+const API_BASE_URL = "http://localhost:5000";
+
+const state = { docs: null, question: null, qtype: "summary", activeExampleId: null };
+
+const el = (id) => document.getElementById(id);
+
+function pmidLink(d) {
+  return `<a class="pmid-link" href="${d.url}" target="_blank">PMID ${d.pmid}</a>`;
+}
+
+function renderDocs(docs) {
+  el("results").innerHTML = docs.map((d, i) => `
+    <div class="doc">
+      <div class="rank">#${i + 1}</div>
+      <a class="title" href="${d.url}" target="_blank">${escapeHtml(d.title || "(untitled)")}</a>
+      <div class="abstract">${escapeHtml(d.abstract || "")}</div>
+      <div style="margin-top:6px;">${pmidLink(d)}</div>
+    </div>
+  `).join("");
+}
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function showResults(question, qtype, docs) {
+  state.docs = docs;
+  state.question = question;
+  state.qtype = qtype;
+  el("result-heading").textContent = `Top ${docs.length} reranked results`;
+  renderDocs(docs);
+  el("result-section").style.display = "";
+  el("answer-box").style.display = "none";
+  el("answer-box").innerHTML = "";
+  el("gen-status").textContent = "";
+  el("gen-status").className = "status";
+}
+
+async function runSearch(question, qtype) {
+  el("status").className = "status";
+  el("status").textContent = "Reranking 100 candidates with a cross-encoder on CPU — this takes about a minute...";
+  el("search-btn").disabled = true;
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    showResults(question, qtype, data.results);
+    el("status").textContent = "";
+  } catch (err) {
+    el("status").className = "status error";
+    el("status").textContent = `Search failed: ${err.message}`;
+  } finally {
+    el("search-btn").disabled = false;
+  }
+}
+
+async function runGenerate() {
+  if (!state.docs) return;
+  el("gen-status").className = "status";
+  el("gen-status").textContent = "Asking Gemini for a cited answer...";
+  el("generate-btn").disabled = true;
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: state.question, qtype: state.qtype, docs: state.docs }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    renderAnswer(data);
+    el("gen-status").textContent = "";
+  } catch (err) {
+    el("gen-status").className = "status error";
+    el("gen-status").textContent = `Generation failed: ${err.message}`;
+  } finally {
+    el("generate-btn").disabled = false;
+  }
+}
+
+function renderAnswer(data) {
+  const box = el("answer-box");
+  box.style.display = "";
+  let html = "";
+  if (data.exact_answer !== null && data.exact_answer !== undefined) {
+    const exact = Array.isArray(data.exact_answer) ? data.exact_answer.join(", ") : data.exact_answer;
+    html += `<div class="exact">${escapeHtml(String(exact))}</div>`;
+  }
+  html += `<div>${escapeHtml(data.ideal_answer || "")}</div>`;
+  box.innerHTML = html;
+}
+
+function showPrecomputedAnswer(example) {
+  renderAnswer({ exact_answer: example.exact_answer, ideal_answer: example.ideal_answer });
+  el("gen-status").textContent = "";
+}
+
+async function loadExamples() {
+  try {
+    const resp = await fetch("examples.json");
+    const examples = await resp.json();
+    el("examples").innerHTML = examples.map((ex) =>
+      `<button class="example-chip" data-id="${ex.id}">${escapeHtml(ex.question)}</button>`
+    ).join("");
+    [...document.querySelectorAll(".example-chip")].forEach((btn, i) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".example-chip").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const ex = examples[i];
+        state.activeExampleId = ex.id;
+        showResults(ex.question, ex.qtype, ex.docs);
+        // the "Generate" button, when clicked for an active curated example, reveals
+        // the precomputed answer instantly instead of calling the live backend
+        el("generate-btn").onclick = () => showPrecomputedAnswer(ex);
+      });
+    });
+  } catch (err) {
+    el("examples").innerHTML = `<span class="status error">Couldn't load examples.json</span>`;
+  }
+}
+
+el("search-btn").addEventListener("click", () => {
+  const question = el("question").value.trim();
+  if (!question) return;
+  state.activeExampleId = null;
+  document.querySelectorAll(".example-chip").forEach((b) => b.classList.remove("active"));
+  el("generate-btn").onclick = runGenerate;
+  runSearch(question, el("qtype").value);
+});
+
+el("question").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") el("search-btn").click();
+});
+
+el("generate-btn").onclick = runGenerate;
+
+loadExamples();
+</script>
+</body>
+</html>

@@ -161,6 +161,35 @@ Verify whatever `FREE_RPM`/`FREE_RPD`/pricing you use against your own AI Studio
 ai.google.dev/pricing first — Google doesn't publish a reliable per-model table, and the
 defaults baked into the script may be stale by the time you read this.
 
+## Web demo
+
+`server.py` + `web/index.html` is a public-facing showcase, separate from `app.py`
+(Streamlit, meant for your own use): a curated set of real example questions with
+precomputed results load instantly, and a free-text search box runs the live pipeline for
+real. The split exists because reranking genuinely takes about a minute on CPU, and because a
+public page can't embed your Gemini key or hit the production model's 20 req/day free tier.
+
+```bash
+python server.py                 # Flask API: /api/search, /api/generate - keeps the key server-side
+python web/precompute_examples.py  # regenerate web/examples.json if you change the curated questions
+```
+
+Then open `web/index.html` (edit the `API_BASE_URL` constant at the top of its `<script>` to
+point at wherever `server.py` is actually running) and drop it into your own site, or serve it
+alongside the backend. Notes on the design:
+
+- **Generation uses `gemini-3.5-flash-lite`, not the production default.** `server.py` hardcodes
+  this (`PUBLIC_GENERATION_MODEL`) because `gemini-3.6-flash`'s free tier (20 req/day, confirmed)
+  would be exhausted by a handful of visitors; flash-lite's reported ~500/day headroom can
+  actually survive real traffic. `generate_response.py`'s own default is untouched.
+- **`/api/generate` is rate-limited per IP** (5/hour by default, in-memory - resets if the
+  server restarts) since it burns a shared, finite daily quota. `/api/search` isn't, since it
+  only costs this server's CPU and each call already takes ~1 minute, which self-limits abuse.
+- **The backend needs to actually be reachable** from wherever `index.html` is hosted - for now
+  that's whatever machine runs `server.py` (e.g. this laptop for testing); making it reachable
+  from the public internet (the Surface Pro 3 mini-server, a tunnel, a cloud host, etc.) is a
+  separate deployment step.
+
 ## Deploying on low-power hardware
 
 This runs fine CPU-only on something like an old Surface Pro 3 (8GB RAM) acting as a mini

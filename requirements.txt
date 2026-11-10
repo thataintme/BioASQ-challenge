@@ -18,3 +18,7 @@ google-genai
 
 # UI
 streamlit
+
+# web showcase backend
+flask
+flask-cors
