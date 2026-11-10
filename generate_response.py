@@ -14,6 +14,7 @@ import re
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types as genai_types
 
 from corpus import CORPUS
 import hybrid_search
@@ -35,7 +36,13 @@ def _hybrid_rerank_search(question, k=K):
 
 SEARCH_FN = _hybrid_rerank_search
 
-CLIENT = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+# The streaming interactions.create() call has been observed to hang for 90+ seconds
+# instead of raising promptly when the account is over its daily free-tier quota -
+# an explicit timeout makes that fail fast and visibly instead of looking stuck.
+CLIENT = genai.Client(
+    api_key=os.environ["GEMINI_API_KEY"],
+    http_options=genai_types.HttpOptions(timeout=30_000),  # ms
+)
 
 # ---------------------------------------------------------------- prompts
 

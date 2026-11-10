@@ -45,10 +45,10 @@ def get_candidates(question, k=100):
     return [str(pmid) for pmid, _ in hybrid_search.search(question, k=k)]
 
 
-# Free-tier limits for generate.MODEL (gemini-3.6-flash). Google doesn't publish a
-# per-model table (official docs just say "check your project in AI Studio, limits
-# vary and aren't guaranteed"); these are third-party-reported values as of 2026-11-09
-# - VERIFY against your own AI Studio dashboard before trusting them for a real report.
+# Free-tier limits for generate.MODEL (gemini-3.6-flash). FREE_RPD=20 is CONFIRMED - hit it
+# directly on 2026-11-09, the API's own 429 body says "limit: 20 ... Free Tier" verbatim.
+# FREE_RPM=5 is still third-party-reported (Google's docs don't publish a per-model RPM
+# table) - verify against your own AI Studio dashboard if that one matters to your report.
 FREE_RPM = 5
 FREE_RPD = 20
 
