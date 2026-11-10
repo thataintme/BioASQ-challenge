@@ -12,10 +12,10 @@ import json
 import os
 import re
 
-import pandas as pd
 from dotenv import load_dotenv
 from google import genai
 
+from corpus import CORPUS
 import hybrid_search
 import reranker
 
@@ -35,8 +35,6 @@ def _hybrid_rerank_search(question, k=K):
 
 SEARCH_FN = _hybrid_rerank_search
 
-# Loaded once at import, not once per question
-CORPUS = pd.read_json("./corpus.jsonl", lines=True, dtype={"pmid": str}).set_index("pmid")
 CLIENT = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 # ---------------------------------------------------------------- prompts

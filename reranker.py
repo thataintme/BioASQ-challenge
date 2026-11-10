@@ -4,14 +4,14 @@
 
 import json
 
-import pandas as pd
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+from corpus import CORPUS
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 tok = AutoTokenizer.from_pretrained("ncbi/MedCPT-Cross-Encoder")
 model = AutoModelForSequenceClassification.from_pretrained("ncbi/MedCPT-Cross-Encoder").to(DEVICE).eval()
-CORPUS = pd.read_json("./corpus.jsonl", lines=True, dtype={"pmid": str}).set_index("pmid")
 
 
 def rerank(question, candidate_pmids, k=10, chunk=25):

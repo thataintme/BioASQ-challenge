@@ -18,6 +18,10 @@ Full per-question numbers are in `search_evals/`.
 ## Pipeline
 
 ```
+corpus.py                               single shared load of corpus.jsonl (bm25_search, dense_search,
+                                         reranker, and generate_response all import this instead of
+                                         each loading their own copy - matters on constrained hardware)
+
 corpus_builder.py                      -> corpus.jsonl            (fetch abstracts from PubMed)
 notebooks/..._corpus_encoding.ipynb    -> corpus_embeddings.pt    (MedCPT article encoder, run on GPU)
 

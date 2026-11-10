@@ -1,16 +1,11 @@
 # dense_search.py
-import json
 import faiss, numpy as np, torch
 from transformers import AutoTokenizer, AutoModel
-import pandas as pd
+
+from corpus import PMIDS as pmids
 
 vecs = torch.load("corpus_embeddings.pt").float().cpu().numpy()   # (n_docs, 768)
 # The corpus_embeddings holds only numbers, with row 0, row 1, and so on, and no record of which paper each row belongs to. FAISS returns row numbers, so you need that list to turn row number to pmid.
-corpus = pd.read_json("corpus.jsonl", lines=True, dtype={"pmid": str})
-pmids = corpus["pmid"].tolist()
-
-#debug
-# print(len(pmids), vecs.shape[0])   # must be equal
 
 assert len(pmids) == len(vecs)
 

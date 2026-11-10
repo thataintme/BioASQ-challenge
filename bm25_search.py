@@ -4,10 +4,10 @@ import json
 import pandas as pd
 import re
 
+from corpus import PMIDS, TEXTS
 
-corpus = pd.read_json('./corpus.jsonl', lines=True)
 stemmer = Stemmer.Stemmer("english")
-texts = [corpus.iloc[i]["title"] + " " + corpus.iloc[i]["abstract"] for i in range(len(corpus))]
+texts = TEXTS
 
 # Normally bm25s.tokenize splits on space and punctuation, which is not good in medical search
 # # example Vitamin-D, Covid-19, etc. So use custom regex
@@ -22,7 +22,7 @@ retriever.index(corpus_tokens)
 def search(question, k=10):
     q = bm25s.tokenize(question, stopwords="en", stemmer=stemmer, token_pattern=token_pattern)
     idx, scores = retriever.retrieve(q, k=k)
-    return [(int(corpus.iloc[i]["pmid"]), s) for i, s in zip(idx.tolist()[0], scores.tolist()[0])]
+    return [(int(PMIDS[i]), s) for i, s in zip(idx.tolist()[0], scores.tolist()[0])]
 
 
 
