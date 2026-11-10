@@ -1,7 +1,7 @@
 # Run this after collecting cross-encoder retrieval pmids on Colab (or any GPU environment)
 #
 # Usage:
-#   python cross-encoder_eval.py --input retrievals/cross-encoder_reranked_top10_ml256.csv \
+#   python cross-encoder_eval.py --input retrievals/reranked_top10_ml256.csv \
 #       --output search_evals/cross-encoder-reranked_ml256.csv --label "Cross-Encoder ml=256"
 
 import argparse
@@ -13,9 +13,9 @@ import pandas as pd
 from tqdm import tqdm
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--input", default="retrievals/cross-encoder_reranked_top10.csv")
-ap.add_argument("--output", default="search_evals/cross-encoder-reranked.csv")
-ap.add_argument("--label", default="Cross-Encoder reranked with Hybrid bi decoder")
+ap.add_argument("--input", default="retrievals/reranked_top10_ml512.csv")
+ap.add_argument("--output", default="search_evals/cross-encoder-reranked_ml512.csv")
+ap.add_argument("--label", default="Cross-Encoder ml=512")
 args = ap.parse_args()
 
 with open('./Dataset/BioASQ-training14b/training14b.json', encoding='utf-8') as f:

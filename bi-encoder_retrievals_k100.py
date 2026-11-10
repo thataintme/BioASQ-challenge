@@ -1,5 +1,5 @@
 """
-Generates 100 retrievals per question using hybrid retrieval and stores retrieved document pmids into ./bi-encoder_retrievals/
+Generates 100 retrievals per question using hybrid retrieval and stores retrieved document pmids into retrievals/hybrid_search_retrievals_k100.csv
 
 Adjust number of retrievals with K
 """
