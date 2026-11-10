@@ -221,20 +221,35 @@ def summarize(df):
 
 
 def main():
+    global PRICE_IN_PER_M, PRICE_OUT_PER_M, PRICES_CHECKED_ON
     ap = argparse.ArgumentParser()
     ap.add_argument("questions")
     ap.add_argument("--n", type=int, default=100)
     ap.add_argument("--out", default="latency_runs.csv")
     ap.add_argument("--cache", action="store_true", help="run every question twice: cold then warm")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--model", default=generate.MODEL,
+                     help="override generate_response.MODEL for this run only (e.g. a model "
+                          "with more free-tier daily quota than the production default)")
+    ap.add_argument("--rpm", type=int, default=FREE_RPM, help="override FREE_RPM for --model")
+    ap.add_argument("--rpd", type=int, default=FREE_RPD, help="override FREE_RPD for --model")
+    ap.add_argument("--price-in", type=float, default=PRICE_IN_PER_M,
+                     help="override PRICE_IN_PER_M (USD/1M tokens) for --model")
+    ap.add_argument("--price-out", type=float, default=PRICE_OUT_PER_M,
+                     help="override PRICE_OUT_PER_M (USD/1M tokens) for --model")
+    ap.add_argument("--price-date", default=PRICES_CHECKED_ON,
+                     help="override PRICES_CHECKED_ON label for --model's prices")
     args = ap.parse_args()
+
+    generate.MODEL = args.model  # patches every generate.* call site that reads it at call time
+    PRICE_IN_PER_M, PRICE_OUT_PER_M, PRICES_CHECKED_ON = args.price_in, args.price_out, args.price_date
 
     qs = json.loads(Path(args.questions).read_text())
     qs = qs["questions"] if isinstance(qs, dict) else qs
     random.Random(args.seed).shuffle(qs)
     qs = qs[: args.n]
 
-    throttle = Throttle(FREE_RPM, FREE_RPD)
+    throttle = Throttle(args.rpm, args.rpd)
     run_one(qs[0], throttle, use_cache=False)  # warm-up, dropped
     CACHE.clear()
 
