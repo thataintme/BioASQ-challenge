@@ -76,15 +76,14 @@ def generate():
 
     body = request.get_json(force=True) or {}
     question = (body.get("question") or "").strip()
-    qtype = body.get("qtype") or "summary"
     docs = body.get("docs") or []
     if not question or not docs:
         return jsonify(error="question and docs are required"), 400
-    if qtype not in generate_response.EXACT_ANSWER_RULES:
-        qtype = "summary"
 
+    # Visitors don't label their question's type, so let the model infer the
+    # exact_answer shape (yes/no, list, or none) from the question itself.
     result = generate_response.answer(
-        question, qtype=qtype,
+        question, qtype="auto",
         docs=[{"pmid": d["pmid"], "title": d["title"], "abstract": d["abstract"]} for d in docs],
         model=PUBLIC_GENERATION_MODEL,
     )

@@ -75,6 +75,10 @@ EXACT_ANSWER_RULES = {
     "factoid": "a list of up to 5 candidate entity names, best first",
     "list": "a list of entity names",
     "summary": "null",
+    # For the public web demo, where users just type a question with no type label:
+    # the model picks the exact_answer shape itself from the question.
+    "auto": '"yes" or "no" if it is a yes/no question; a list of entity names if it asks '
+            "for specific entities; otherwise null",
 }
 
 USER_TEMPLATE = """Question: {question}
