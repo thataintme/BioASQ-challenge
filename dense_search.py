@@ -12,12 +12,13 @@ assert len(pmids) == len(vecs)
 index = faiss.IndexFlatIP(vecs.shape[1])   # exact inner-product search, fine at this size
 index.add(vecs)
 
+DEVICE = "cpu"  # the Space app (hf_space/app.py) switches this to "cuda" on ZeroGPU
 q_tok = AutoTokenizer.from_pretrained("ncbi/MedCPT-Query-Encoder")
 q_model = AutoModel.from_pretrained("ncbi/MedCPT-Query-Encoder").eval()
 
 def search(question, k=10):
     with torch.no_grad():
-        enc = q_tok([question], truncation=True, padding=True, max_length=64, return_tensors="pt")
-        q = q_model(**enc).last_hidden_state[:, 0, :].numpy()
+        enc = q_tok([question], truncation=True, padding=True, max_length=64, return_tensors="pt").to(DEVICE)
+        q = q_model(**enc).last_hidden_state[:, 0, :].cpu().numpy()
     scores, idx = index.search(q, k)
     return [(int(pmids[i]), float(s)) for i, s in zip(idx[0], scores[0])]

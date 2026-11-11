@@ -116,8 +116,9 @@
     <h2>Ask your own question</h2>
     <p style="color:var(--text-dim); margin-top:-6px;">
       Unlike the examples above, nothing here is precomputed: your question goes through hybrid
-      retrieval and MedCPT cross-encoder reranking of 100 candidates live, on a CPU-only server.
-      It typically takes <strong>about a minute</strong>.
+      retrieval and MedCPT cross-encoder reranking of 100 candidates live, on a shared GPU
+      (Hugging Face ZeroGPU). It typically takes <strong>about a second</strong>, or up to
+      ~20 seconds when a GPU first has to be attached.
     </p>
     <div class="search-row">
       <input type="text" id="question" placeholder="e.g. Is CPAP effective for treating sleep apnea?" maxlength="500" />
@@ -145,9 +146,33 @@
 
 </div>
 
-<script>
-// Point this at wherever server.py is actually running.
-const API_BASE_URL = "http://localhost:5000";
+<script type="module">
+import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@2.7.2/dist/browser.js";
+
+// The Hugging Face Space running hf_space/app.py. For a local run of that app,
+// use its URL instead, e.g. "http://localhost:7860".
+const API_SPACE = "santhosh-m/bioasq-rag";
+
+let clientPromise = null;
+function getClient() {
+  if (!clientPromise) {
+    clientPromise = Client.connect(API_SPACE).catch((err) => {
+      clientPromise = null;  // let the next attempt retry, e.g. after the Space wakes up
+      throw err;
+    });
+  }
+  return clientPromise;
+}
+
+async function callApi(endpoint, payload) {
+  const client = await getClient();
+  const result = await client.predict(endpoint, payload);
+  return result.data[0];
+}
+
+function errorMessage(err) {
+  return (err && err.message) || String(err);
+}
 
 const state = { docs: null, question: null, activeExampleId: null };
 
@@ -192,21 +217,15 @@ function showResults(question, docs, precomputed) {
 
 async function runSearch(question) {
   el("status").className = "status";
-  el("status").textContent = "Reranking 100 candidates with a cross-encoder on CPU — this takes about a minute...";
+  el("status").textContent = "Retrieving and reranking 100 candidates...";
   el("search-btn").disabled = true;
   try {
-    const resp = await fetch(`${API_BASE_URL}/api/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
-    showResults(question, data.results, false);
+    const results = await callApi("/search", { question });
+    showResults(question, results, false);
     el("status").textContent = "";
   } catch (err) {
     el("status").className = "status error";
-    el("status").textContent = `Search failed: ${err.message}`;
+    el("status").textContent = `Search failed: ${errorMessage(err)}`;
   } finally {
     el("search-btn").disabled = false;
   }
@@ -218,18 +237,12 @@ async function runGenerate() {
   el("gen-status").textContent = "Asking Gemini for a cited answer...";
   el("generate-btn").disabled = true;
   try {
-    const resp = await fetch(`${API_BASE_URL}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: state.question, docs: state.docs }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    const data = await callApi("/generate", { question: state.question, docs: state.docs });
     renderAnswer(data);
     el("gen-status").textContent = "";
   } catch (err) {
     el("gen-status").className = "status error";
-    el("gen-status").textContent = `Generation failed: ${err.message}`;
+    el("gen-status").textContent = `Generation failed: ${errorMessage(err)}`;
   } finally {
     el("generate-btn").disabled = false;
   }

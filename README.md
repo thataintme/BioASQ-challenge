@@ -1,8 +1,9 @@
 # BioASQ Biomedical Literature RAG
 
-Retrieval pipeline for the [BioASQ](http://bioasq.org/) challenge (task 14b): sparse (BM25) +
-dense (MedCPT) retrieval fused with reciprocal rank fusion, reranked with a MedCPT cross-encoder,
-with an optional Gemini-based answer generation step on top.
+Retrieval pipeline for the [BioASQ](http://bioasq.org/) challenge (task 14b) over ~58k PubMed
+abstracts: sparse (BM25) + dense (MedCPT) retrieval fused with reciprocal rank fusion, reranked
+with a MedCPT cross-encoder, with an optional Gemini generation step on top that answers from
+the retrieved abstracts and cites them by PMID.
 
 ## Results (5729 BioASQ training questions, recall@10 / MRR@10)
 
@@ -12,75 +13,62 @@ with an optional Gemini-based answer generation step on top.
 | Dense (MedCPT)                     | 0.607     | 0.790  |
 | Hybrid (BM25 + dense, RRF)          | 0.683     | 0.869  |
 | + cross-encoder rerank, max_length=512 | 0.699 | 0.873  |
-| + cross-encoder rerank, max_length=256 (**deployed default**) | 0.691 | 0.870 |
+| + cross-encoder rerank, max_length=256 (**default**) | 0.691 | 0.870 |
 | 🔴 + cross-encoder rerank, max_length=128 (regresses below hybrid) | 0.655 | 0.860 |
 
-Reranking's real effect is on recall@10 (pulling more relevant docs into the top 10) — the
+Reranking's real effect is on recall@10 (pulling more relevant docs into the top 10). The
 hybrid stage alone already nearly saturates MRR@10 (whether the *single best* result lands
-first), so there's little room left for reranking to move that number. `max_length` is how
-many tokens of each title+abstract the cross-encoder sees per candidate; 512 is the model's
-full length. Truncating to 256 trades ~1% relative recall@10 for ~2x less CPU time (see
-"Deploying on low-power hardware" below) — truncating further, to 128, erases the reranker's
-entire gain and makes it net-negative versus not reranking at all. Full per-question numbers
-and the three-way comparison are in `search_evals/`.
+first), so there's little room left for reranking to move that number.
 
-## Latency (retrieval only, this laptop: 2019 quad-core CPU, no GPU, max_length=256)
+`max_length` is how many tokens of each title+abstract the cross-encoder sees per candidate;
+512 is the model's full length. Truncating to 256 halves the input per candidate at a cost of
+~1% relative recall@10. Truncating further, to 128, erases the reranker's entire gain and makes
+it net-negative versus not reranking at all. Full per-question numbers are in `search_evals/`.
 
-| stage                            | p50 ms | p95 ms | mean ms | n   |
-|------------------------------------|-------:|-------:|--------:|----:|
-| BM25                                |      3 |     11 |       4 |  20 |
-| Dense (MedCPT query encoder)        |    154 |    219 |     162 |  20 |
-| RRF fusion                          |      0 |      0 |       0 |  20 |
-| retrieve (bm25 + dense + fusion)    |    114 |    157 |     122 | 100 |
-| cross-encoder rerank                | 53,388 | 56,295 |  53,596 | 100 |
-| end-to-end (retrieve + rerank)      | 53,531 | 56,418 |  53,718 | 100 |
+## Latency (n=100)
 
-p95 needs a reasonably large sample to mean anything — n=20 is fine for the sub-stage breakdown
-above (BM25/dense/fusion individually, all comfortably under a quarter second regardless), but
-the headline retrieve/rerank/end-to-end numbers use n=100, pulled from the same benchmark run as
-"Latency with generation" below (that run records retrieve_ms/rerank_ms for every query
-regardless of whether generation is included, so no second run was needed). The two samples
-agree on the story even though they're not identical in magnitude (n=20 alone put end-to-end
-p50 at ~58.7s) - the cross-encoder rerank step is essentially the entire latency budget (>99%),
-which is exactly the cost the `max_length` tradeoff above is managing. See
-`retrieval_latency_bench.py` (n=20, no Gemini dependency) and `latency_bench.py` (n=100, full
-pipeline).
-
-## Latency with generation (n=100, end to end)
+Collected with the retrieval system deployed on Hugging Face Spaces on ZeroGPU (a slice of an
+NVIDIA RTX PRO 6000 Blackwell GPU), cross-encoder `max_length=256`, 100 BioASQ training
+questions sampled with a fixed seed, one warm-up query dropped. Every stage of every query comes
+from the same run (`hf_space/latency_bench.py`).
 
 | stage                              | p50 ms | p95 ms | mean ms |
 |-------------------------------------|-------:|-------:|--------:|
-| retrieve (bm25 + dense + fusion)    |    114 |    157 |     122 |
-| cross-encoder rerank                | 53,388 | 56,295 |  53,596 |
-| time to first token                 |  3,768 |  9,616 |   4,743 |
-| generation (full response)          |  5,200 | 11,445 |   6,404 |
-| end-to-end                          | 58,853 | 66,090 |  60,123 |
+| BM25                                |    1.8 |    5.0 |     2.5 |
+| Dense (MedCPT query encoder + FAISS) |    9.2 |   16.1 |    18.1 |
+| RRF fusion                          |    0.1 |    0.2 |     0.1 |
+| retrieve (BM25 + dense + fusion)    |   11.6 |   20.9 |    20.8 |
+| cross-encoder rerank (100 -> 10)    |    261 |    273 |     263 |
+| time to first token                 |  1,424 |  3,545 |   1,810 |
+| generation (full response)          |  1,957 |  4,335 |   2,657 |
+| end-to-end (retrieve + rerank + generation) | 2,260 | 4,692 | 2,941 |
 
-Measured end to end in one benchmark pass per query (`latency_bench.py`), not by separately
-measuring generation and adding it to the retrieval numbers above - that would miss any
-interaction between the stages. 0 retries and 0 rate-limit errors across all 100 queries.
-Ran against **`gemini-3.5-flash-lite`**, not the `gemini-3.6-flash` production default -
-3.6-flash's free tier caps out at a confirmed 20 requests/day (see commit history: hit this
-directly while testing), which can't support a statistically credible n in one sitting;
-flash-lite's free tier is reported (third-party, unverified) at ~500 requests/day. Average
-~3,500 input / ~140 output tokens per query; free tier cost is $0, paid-tier equivalent
-~$0.0014/query (~$1.41 per 1k queries, flash-lite pricing as of 2026-11-09, unverified,
-third-party sourced). Generation (ttft+gen) is real but small next to reranking - cross-encoder
-rerank is still >90% of total latency.
+- **Generation dominates end-to-end time** (~90% of the mean); reranking is ~9% and retrieval
+  under 1%.
+- **Means above medians come from a few outliers.** Three queries ran dense encoding and
+  reranking at ~290 ms and ~350 ms instead of ~9 ms and ~260 ms (still on the GPU), and one
+  generation call took 27.7 s. The p95 numbers are unaffected by the single slow generation.
+- **Generation used `gemini-3.5-flash-lite`**, not `generate_response.MODEL`
+  (`gemini-3.6-flash`): 3.6-flash's free tier is capped at 20 requests/day (confirmed), too few
+  for n=100 in one run. 0 retries and 0 rate-limit errors across all 100 queries. Average
+  ~3,570 input / ~140 output tokens per query; free-tier cost is $0, paid-tier equivalent
+  ~$0.0014/query (flash-lite pricing as of 2026-11-09, third-party sourced, unverified).
+- Stage times are measured on the serving machine, so they exclude network time to the client.
 
 ## Pipeline
 
 ```
 corpus.py                               single shared load of corpus.jsonl (bm25_search, dense_search,
                                          reranker, and generate_response all import this instead of
-                                         each loading their own copy - matters on constrained hardware)
+                                         each loading their own copy)
 
 corpus_builder.py                      -> corpus.jsonl            (fetch abstracts from PubMed)
 notebooks/..._corpus_encoding.ipynb    -> corpus_embeddings.pt    (MedCPT article encoder, run on GPU)
 
 bm25_search.py      search(question, k)  sparse retrieval
 dense_search.py     search(question, k)  dense retrieval (MedCPT query encoder + FAISS)
-hybrid_search.py     search(question, k)  reciprocal rank fusion of the two above
+hybrid_search.py    search(question, k)  reciprocal rank fusion of the two above
+reranker.py         rerank(question, candidate_pmids, k)  MedCPT cross-encoder
 
 bi-encoder_retrievals_k100.py          -> retrievals/hybrid_search_retrievals_k100.csv
 reranker.py / notebooks/..._cross_encoder_reranking.ipynb
@@ -91,12 +79,13 @@ cross-encoder_eval.py  -> search_evals/cross-encoder-reranked_ml{512,256,128}.cs
 
 generate_response.py  answer(question, qtype, docs=...)  Gemini generation with citations, given docs
 app.py                 Streamlit UI: search -> show reranked results -> optional "generate answer"
-latency_bench.py        p50/p95 latency + free-tier cost benchmark, stage by stage
 ```
 
 `generate_response.answer()` can retrieve on its own (hybrid search + rerank by default) or take
-an already-retrieved `docs` list, which is what `app.py` uses so the generated answer is grounded
-in exactly what's shown on screen.
+an already-retrieved `docs` list, so the answer is grounded in exactly the documents shown.
+`qtype` is the BioASQ question type (`yesno`, `factoid`, `list`, `summary`), which sets the
+shape of the short `exact_answer`; `auto` lets the model infer it from the question when the
+type isn't known.
 
 ## Setup
 
@@ -139,90 +128,10 @@ To reproduce the retrieval evals:
 python search_evals.py          # bm25 / dense / hybrid @10
 python bi-encoder_retrievals_k100.py
 # rerank retrievals/hybrid_search_retrievals_k100.csv -> retrievals/reranked_top10_ml{512,256,128}.csv
-#   (notebooks/..._cross_encoder_reranking.ipynb on a GPU - a full 5729-question CPU rerank
-#   is impractically slow, see "Deploying on low-power hardware" below)
+#   (notebooks/..._cross_encoder_reranking.ipynb on a GPU)
 python cross-encoder_eval.py --input retrievals/reranked_top10_ml256.csv \
     --output search_evals/cross-encoder-reranked_ml256.csv --label "Cross-Encoder ml=256"
 ```
-
-To benchmark retrieval latency (BM25 / dense / RRF fusion / cross-encoder rerank — no Gemini
-call, so no rate limits and no throttling to wait through):
-
-```bash
-python retrieval_latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 20
-```
-
-To benchmark latency with generation included (results above): `latency_bench.py` does the
-same thing end to end, adding the Gemini generation step (ttft/gen_ms) and free-tier cost
-accounting in the same per-query run. The production default model (`generate_response.MODEL`)
-may not have enough free-tier daily quota for a credible sample size — use `--model` (and
-`--rpm`/`--rpd`/`--price-in`/`--price-out`/`--price-date`) to point at a different one for the
-benchmark run without changing the production default:
-
-```bash
-python latency_bench.py Dataset/BioASQ-training14b/training14b.json --n 100 \
-    --model gemini-3.5-flash-lite --rpm 10 --rpd 400 --price-in 0.30 --price-out 2.50
-```
-
-Verify whatever `FREE_RPM`/`FREE_RPD`/pricing you use against your own AI Studio dashboard and
-ai.google.dev/pricing first — Google doesn't publish a reliable per-model table, and the
-defaults baked into the script may be stale by the time you read this.
-
-## Web demo
-
-`server.py` + `web/index.html` is a public-facing showcase, separate from `app.py`
-(Streamlit, meant for your own use): a curated set of real example questions with
-precomputed results load instantly, and a free-text search box runs the live pipeline for
-real. The split exists because reranking genuinely takes about a minute on CPU, and because a
-public page can't embed your Gemini key or hit the production model's 20 req/day free tier.
-
-```bash
-python server.py                 # Flask API: /api/search, /api/generate - keeps the key server-side
-python web/precompute_examples.py  # regenerate web/examples.json if you change the curated questions
-```
-
-Then open `web/index.html` (edit the `API_BASE_URL` constant at the top of its `<script>` to
-point at wherever `server.py` is actually running) and drop it into your own site, or serve it
-alongside the backend. Notes on the design:
-
-- **Generation uses `gemini-3.5-flash-lite`, not the production default.** `server.py` hardcodes
-  this (`PUBLIC_GENERATION_MODEL`) because `gemini-3.6-flash`'s free tier (20 req/day, confirmed)
-  would be exhausted by a handful of visitors; flash-lite's reported ~500/day headroom can
-  actually survive real traffic. `generate_response.py`'s own default is untouched.
-- **`/api/generate` is rate-limited per IP** (5/hour by default, in-memory - resets if the
-  server restarts) since it burns a shared, finite daily quota. `/api/search` isn't, since it
-  only costs this server's CPU and each call already takes ~1 minute, which self-limits abuse.
-- **The backend needs to actually be reachable** from wherever `index.html` is hosted - for now
-  that's whatever machine runs `server.py` (e.g. this laptop for testing); making it reachable
-  from the public internet (the Surface Pro 3 mini-server, a tunnel, a cloud host, etc.) is a
-  separate deployment step.
-
-## Deploying on low-power hardware
-
-This runs fine CPU-only on something like an old Surface Pro 3 (8GB RAM) acting as a mini
-server for single-user, non-concurrent use — but a few things matter there:
-
-- **Install the CPU-only torch wheel**, not the default one. Plain `pip install torch` often
-  pulls in CUDA binaries you don't need and don't want to download on a GPU-less machine:
-  ```bash
-  pip install torch --index-url https://download.pytorch.org/whl/cpu
-  ```
-- **Expect slow, not fast.** Two BERT-base-sized models (MedCPT query encoder + MedCPT
-  cross-encoder) running on CPU means cold start (loading both models + building the
-  BM25/FAISS indexes) can take 1-3 minutes. Cross-encoder reranking is the dominant cost in
-  the whole pipeline: it pads every batch to its *longest* document, and a single long
-  abstract can force a full chunk up to the model's max sequence length. Measured on a
-  2019 quad-core laptop CPU (no GPU), a chunk of 25 candidates at full length took ~30s;
-  that's exactly why the default `max_length` is 256, not 512 (see Results above) — on an
-  actual 2014-era dual-core CPU like a Surface Pro 3, expect this to be meaningfully slower
-  still.
-- **Memory is already deduplicated** — `corpus.py` loads `corpus.jsonl` once and is shared by
-  `bm25_search`, `dense_search`, `reranker`, and `generate_response`, instead of each module
-  keeping its own copy. Without that, 4 separate copies of the corpus plus both models would be
-  tight on 8GB.
-- **Watch for thermal throttling** on fanless variants (base i3 Surface Pro 3). Single queries
-  are short bursts so this shouldn't matter in normal use, but if it feels like it's slowing down
-  the longer it runs, that's likely why.
 
 ## future_work/
 
