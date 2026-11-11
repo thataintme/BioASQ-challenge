@@ -118,7 +118,8 @@
       Unlike the examples above, nothing here is precomputed: your question goes through hybrid
       retrieval and MedCPT cross-encoder reranking of 100 candidates live, on a shared GPU
       (Hugging Face ZeroGPU). It typically takes <strong>about a second</strong>, or up to
-      ~20 seconds when a GPU first has to be attached.
+      ~20 seconds when a GPU first has to be attached. If the demo hasn't been used in a while,
+      the first search can take a few minutes while the ZeroGPU Space starts up.
     </p>
     <div class="search-row">
       <input type="text" id="question" placeholder="e.g. Is CPAP effective for treating sleep apnea?" maxlength="500" />
